@@ -1,0 +1,512 @@
+<!DOCTYPE html>
+<html lang="sk">
+<head>
+<meta charset="UTF-8"/>
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no"/>
+<meta name="apple-mobile-web-app-capable" content="yes"/>
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent"/>
+<meta name="apple-mobile-web-app-title" content="Batch Brew"/>
+<meta name="theme-color" content="#0D0907"/>
+<title>Batch Brew</title>
+<style>
+*{box-sizing:border-box;-webkit-tap-highlight-color:transparent;margin:0;padding:0;}
+html,body{height:100%;background:#0D0907;}
+body{color:#F5E6C8;font-family:Georgia,'Times New Roman',serif;overscroll-behavior:none;}
+input[type=number]{-moz-appearance:textfield;}
+input[type=number]::-webkit-outer-spin-button,
+input[type=number]::-webkit-inner-spin-button{-webkit-appearance:none;}
+button{-webkit-appearance:none;font-family:Georgia,'Times New Roman',serif;cursor:pointer;}
+.tab-btn{flex:1;padding:11px 0;background:transparent;border:none;border-bottom:2px solid transparent;color:#6B5B45;font-size:11px;letter-spacing:2px;text-transform:uppercase;transition:all 0.3s;}
+.tab-btn.on{border-bottom-color:var(--c,#D4A574);color:var(--c,#D4A574);}
+.grind-track{height:6px;background:#1E150E;border-radius:3px;overflow:hidden;margin-top:6px;}
+.grind-fill{height:100%;border-radius:3px;transition:width 0.7s ease,background 0.5s;}
+.dot{width:9px;height:9px;border-radius:50%;flex-shrink:0;transition:all 0.3s;}
+@keyframes blink{0%,100%{opacity:1}50%{opacity:0.45}}
+.blinking{animation:blink 1.2s ease-in-out infinite;}
+</style>
+</head>
+<body>
+<div id="app" style="display:flex;justify-content:center;padding:env(safe-area-inset-top,20px) 0 56px;min-height:100%;"></div>
+
+<script src="https://cdnjs.cloudflare.com/ajax/libs/react/18.2.0/umd/react.production.min.js" crossorigin="anonymous"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/react-dom/18.2.0/umd/react-dom.production.min.js" crossorigin="anonymous"></script>
+<script>
+(function(){
+"use strict";
+
+var R = React;
+var h = R.createElement;
+var useState = R.useState;
+var useEffect = R.useEffect;
+var useRef = R.useRef;
+var useCallback = R.useCallback;
+
+// ── DATA ────────────────────────────────────────────────
+var ROASTS = [
+  {id:"light",  sk:"Svetlá",  ratio:15, label:"1:15", desc:"High extraction · bright acidity",   color:"#D4A574",
+   grind:{range:"6.5 – 7.5", pct:62, tip:"Coarser grind to avoid over-extraction. Start at 7 and dial in."}},
+  {id:"medium", sk:"Stredná", ratio:16, label:"1:16", desc:"Balanced flavour · smooth body",      color:"#A0522D",
+   grind:{range:"5.5 – 6.5", pct:50, tip:"Classic batch brew zone. Start at 6 — bitter = coarser, sour = finer."}},
+  {id:"dark",   sk:"Tmavá",   ratio:17, label:"1:17", desc:"Low extraction · full body",          color:"#7B3F1E",
+   grind:{range:"4.5 – 5.5", pct:38, tip:"Finer grind compensates for lower solubility. Start at 5."}},
+];
+
+function buildPhases(g, ratio) {
+  var total = g * ratio;
+  var bloom = Math.round(g * 2);
+  var rem   = total - bloom;
+  var p1    = Math.round(rem * 0.40);
+  var p2    = Math.round(rem * 0.35);
+  var p3    = total - bloom - p1 - p2;
+  return [
+    {name:"Blooming", start:0,   dur:45, water:bloom, cum:bloom,         icon:"💧", info:"Slowly saturate all the grounds evenly"},
+    {name:"Pour 1",   start:45,  dur:45, water:p1,    cum:bloom+p1,      icon:"🫗", info:"Circular motion from center outward"},
+    {name:"Pour 2",   start:90,  dur:45, water:p2,    cum:bloom+p1+p2,   icon:"🫗", info:"Keep the water level stable"},
+    {name:"Pour 3",   start:135, dur:45, water:p3,    cum:total,         icon:"🫗", info:"Final pour, completing extraction"},
+    {name:"Drip",     start:180, dur:60, water:0,     cum:total,         icon:"⏳", info:"Let the bed drain completely"},
+  ];
+}
+
+function fmtTime(s) {
+  return Math.floor(s/60) + ":" + (s%60 < 10 ? "0" : "") + (s%60);
+}
+
+// ── CARD wrapper ─────────────────────────────────────────
+function Card(props) {
+  return h("div", {
+    style: Object.assign({
+      background:"#14100C",
+      border:"1px solid #2A1F14",
+      borderRadius:"12px",
+      padding:"16px",
+      marginBottom:"14px",
+    }, props.style || {})
+  }, props.children);
+}
+
+function Label(props) {
+  return h("div", {
+    style:{fontSize:"9px",letterSpacing:"3px",color:"#8B7355",textTransform:"uppercase",marginBottom:"10px"}
+  }, props.children);
+}
+
+// ── BREW TAB ─────────────────────────────────────────────
+function BrewTab(props) {
+  var roast = props.roast;
+  var setRoast = props.setRoast;
+  var g = props.g;
+  var setG = props.setG;
+  var c = roast.color;
+
+  var _timer = useState(0);
+  var elapsed = _timer[0], setElapsed = _timer[1];
+  var _run = useState(false);
+  var running = _run[0], setRunning = _run[1];
+  var _done = useState(false);
+  var done = _done[0], setDone = _done[1];
+  var ivRef = useRef(null);
+
+  var TOTAL  = 240;
+  var water  = g * roast.ratio;
+  var phases = buildPhases(g, roast.ratio);
+
+  // current phase index
+  var curIdx = -1;
+  for (var i = 0; i < phases.length; i++) {
+    if (elapsed >= phases[i].start && (i === phases.length-1 || elapsed < phases[i+1].start)) {
+      curIdx = i; break;
+    }
+  }
+  var cur = phases[curIdx];
+
+  function doReset() { setRunning(false); setElapsed(0); setDone(false); }
+  function doStart() { if (done) { setElapsed(0); setDone(false); } setRunning(true); }
+  function doPause() { setRunning(false); }
+
+  useEffect(function() {
+    if (running) {
+      ivRef.current = setInterval(function() {
+        setElapsed(function(e) {
+          if (e >= TOTAL) { clearInterval(ivRef.current); setRunning(false); setDone(true); return TOTAL; }
+          return e + 1;
+        });
+      }, 1000);
+    } else {
+      clearInterval(ivRef.current);
+    }
+    return function() { clearInterval(ivRef.current); };
+  }, [running]);
+
+  useEffect(function() { doReset(); }, [roast.id, g]);
+
+  var pct = (elapsed / TOTAL) * 100;
+
+  return h("div", {style:{padding:"0 16px"}},
+
+    // Roast selector
+    h(Card, null,
+      h(Label, null, "Roast"),
+      h("div", {style:{display:"grid",gridTemplateColumns:"repeat(3,1fr)",gap:"8px",marginBottom:"8px"}},
+        ROASTS.map(function(r) {
+          var active = roast.id === r.id;
+          return h("button", {
+            key: r.id, onClick: function() { setRoast(r); },
+            style:{background:active ? r.color+"22":"transparent", border:"1px solid "+(active?r.color:"#2A1F14"),
+                   borderRadius:"10px", padding:"12px 6px", color:active?r.color:"#6B5B45",
+                   textAlign:"center", transition:"all 0.3s"}
+          },
+            h("div",{style:{fontSize:"12px",fontWeight:"bold"}}, r.sk),
+            h("div",{style:{fontSize:"11px",marginTop:"2px",opacity:0.8}}, r.label)
+          );
+        })
+      ),
+      h("div",{style:{fontSize:"11px",color:"#6B5B45",textAlign:"center",fontStyle:"italic"}}, roast.desc)
+    ),
+
+    // Grind guide
+    h(Card, null,
+      h("div",{style:{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:"8px"}},
+        h(Label,{style:{marginBottom:0}}, "Grind · Fellow Ode 2"),
+        h("div",{style:{fontSize:"19px",color:c,fontWeight:"bold",transition:"color 0.5s"}}, roast.grind.range)
+      ),
+      h("div",{style:{fontSize:"9px",color:"#4A3728",display:"flex",justifyContent:"space-between"}},
+        h("span",null,"1 — Fine"), h("span",null,"11 — Coarse")
+      ),
+      h("div",{className:"grind-track"},
+        h("div",{className:"grind-fill",style:{width:roast.grind.pct+"%",background:"linear-gradient(90deg,"+c+"66,"+c+")"}})
+      ),
+      h("div",{style:{fontSize:"11px",color:"#8B7355",marginTop:"8px",fontStyle:"italic",lineHeight:1.45}}, roast.grind.tip)
+    ),
+
+    // Coffee amount
+    h(Card, null,
+      h(Label, null, "Coffee amount"),
+      h("div",{style:{display:"flex",alignItems:"center",gap:"12px",marginBottom:"14px"}},
+        h("button",{onClick:function(){setG(function(x){return Math.max(10,x-5);});},
+          style:{width:"40px",height:"40px",borderRadius:"50%",border:"1px solid "+c+"44",background:"transparent",color:c,fontSize:"22px",display:"flex",alignItems:"center",justifyContent:"center",flexShrink:0}},
+          "−"),
+        h("div",{style:{flex:1,textAlign:"center"}},
+          h("div",{style:{display:"flex",alignItems:"baseline",justifyContent:"center",gap:"4px"}},
+            h("input",{type:"number",value:g,min:10,max:200,
+              onChange:function(ev){var v=parseInt(ev.target.value,10);if(!isNaN(v))setG(Math.max(10,Math.min(200,v)));},
+              style:{background:"transparent",border:"none",color:"#F5E6C8",fontSize:"clamp(38px,9vw,52px)",
+                     fontFamily:"inherit",fontWeight:"bold",width:"88px",textAlign:"center",outline:"none"}}),
+            h("span",{style:{fontSize:"16px",color:"#8B7355"}},"g")
+          ),
+          h("div",{style:{width:"70%",height:"1px",background:"linear-gradient(90deg,transparent,"+c+"55,transparent)",margin:"3px auto"}})
+        ),
+        h("button",{onClick:function(){setG(function(x){return Math.min(200,x+5);});},
+          style:{width:"40px",height:"40px",borderRadius:"50%",border:"1px solid "+c+"44",background:"transparent",color:c,fontSize:"22px",display:"flex",alignItems:"center",justifyContent:"center",flexShrink:0}},
+          "+")
+      ),
+      h("div",{style:{display:"grid",gridTemplateColumns:"repeat(4,1fr)",gap:"4px",textAlign:"center",background:c+"10",borderRadius:"8px",padding:"10px"}},
+        [["Coffee",g+"g","#F5E6C8"],["Water",water+"ml",c],["Ratio",roast.label,"#F5E6C8"],["Time",fmtTime(TOTAL),"#F5E6C8"]].map(function(row){
+          return h("div",{key:row[0]},
+            h("div",{style:{fontSize:"9px",color:"#6B5B45",marginBottom:"2px"}}, row[0]),
+            h("div",{style:{fontSize:"15px",color:row[2],fontWeight:"bold",transition:"color 0.5s"}}, row[1])
+          );
+        })
+      )
+    ),
+
+    // Timer
+    h("div",{style:{background:"#14100C",border:"1px solid "+(running?c+"55":"#2A1F14"),borderRadius:"14px",padding:"18px",marginBottom:"14px",transition:"border-color 0.3s"}},
+      h("div",{style:{textAlign:"center",marginBottom:"14px"}},
+        h("div",{style:{fontSize:"clamp(52px,14vw,76px)",fontWeight:"bold",letterSpacing:"-2px",lineHeight:1,
+                        fontVariantNumeric:"tabular-nums",color:done?c:running?"#F5E6C8":"#3A2A1E",transition:"color 0.3s"}},
+          fmtTime(elapsed)),
+        h("div",{style:{fontSize:"11px",color:"#6B5B45",marginTop:"2px"}}, done ? "✓ Done!" : "of "+fmtTime(TOTAL))
+      ),
+      h("div",{style:{height:"3px",background:"#1E150E",borderRadius:"2px",marginBottom:"14px",overflow:"hidden"}},
+        h("div",{style:{height:"100%",width:pct+"%",background:"linear-gradient(90deg,"+c+"88,"+c+")",borderRadius:"2px",transition:"width 0.8s ease"}})
+      ),
+
+      // Active phase banner
+      (running && cur) ? h("div",{style:{background:c+"15",border:"1px solid "+c+"33",borderRadius:"10px",
+                                          padding:"12px 14px",marginBottom:"12px",display:"flex",alignItems:"center",gap:"10px"}},
+        h("div",{style:{fontSize:"20px"}}, cur.icon),
+        h("div",{style:{flex:1}},
+          h("div",{style:{fontSize:"13px",color:c,fontWeight:"bold",transition:"color 0.3s"}},
+            cur.name,
+            cur.water > 0 ? h("span",{style:{color:"#F5E6C8",marginLeft:"8px"}}, "→ "+cur.water+"ml") : null
+          ),
+          h("div",{style:{fontSize:"11px",color:"#8B7355",marginTop:"2px"}}, cur.info)
+        ),
+        h("div",{style:{textAlign:"right",flexShrink:0}},
+          h("div",{style:{fontSize:"9px",color:"#6B5B45"}}, "left"),
+          h("div",{style:{fontSize:"16px",color:"#F5E6C8"}},
+            fmtTime(Math.max(0, ((phases[curIdx+1]||{start:TOTAL}).start) - elapsed))
+          )
+        )
+      ) : null,
+
+      h("div",{style:{display:"flex",gap:"10px"}},
+        !running
+          ? h("button",{onClick:doStart,style:{flex:1,padding:"14px",background:c,border:"none",borderRadius:"10px",color:"#0D0907",fontSize:"15px",fontWeight:"bold",transition:"background 0.5s"}},
+              elapsed > 0 && !done ? "▶ Continue" : done ? "↺ Repeat" : "▶ Start")
+          : h("button",{onClick:doPause,style:{flex:1,padding:"14px",background:"transparent",border:"1px solid "+c,borderRadius:"10px",color:c,fontSize:"15px",fontWeight:"bold"}},
+              "⏸ Pause"),
+        h("button",{onClick:doReset,style:{padding:"14px 20px",background:"transparent",border:"1px solid #2A1F14",borderRadius:"10px",color:"#6B5B45",fontSize:"15px"}},
+          "↺")
+      )
+    ),
+
+    // Phase list
+    h(Card, null,
+      h(Label, null, "Pour phases"),
+      phases.map(function(p, i) {
+        var isActive = i === curIdx && running;
+        var isPast   = elapsed > ((phases[i+1]||{start:TOTAL}).start);
+        return h("div",{key:i,style:{display:"flex",gap:"10px",padding:"9px 0",
+                                      borderBottom:i < phases.length-1 ? "1px solid #1E150E":"none",
+                                      opacity:isPast && !isActive ? 0.38 : 1, transition:"opacity 0.3s"}},
+          h("div",{style:{display:"flex",flexDirection:"column",alignItems:"center",paddingTop:"3px"}},
+            h("div",{className:"dot",style:{background:isActive?c:(isPast?c+"66":"#2A1F14"),
+                                             border:"2px solid "+(isActive?c:"#2A1F14"),
+                                             boxShadow:isActive?"0 0 8px "+c:"none"}}),
+            i < phases.length-1 ? h("div",{style:{width:"1px",height:"26px",background:"#1E150E",marginTop:"3px"}}) : null
+          ),
+          h("div",{style:{flex:1}},
+            h("div",{style:{display:"flex",justifyContent:"space-between",alignItems:"baseline"}},
+              h("span",{style:{fontSize:"13px",color:isActive?c:"#C4A882",fontWeight:isActive?"bold":"normal",transition:"color 0.3s"}},
+                p.icon+" "+p.name,
+                p.water > 0 ? h("span",{style:{color:isActive?c:"#6B5B45",marginLeft:"6px",fontSize:"11px"}}, p.water+"ml") : null
+              ),
+              h("span",{style:{fontSize:"10px",color:"#4A3728"}}, fmtTime(p.start))
+            ),
+            h("div",{style:{fontSize:"10px",color:"#6B5B45",marginTop:"2px"}}, p.info)
+          )
+        );
+      })
+    ),
+
+    h("div",{style:{textAlign:"center",marginTop:"16px",fontSize:"9px",color:"#2A1F14",letterSpacing:"2px",paddingBottom:"4px"}},
+      "BATCH BREW · 93°C · FELLOW ODE 2")
+  );
+}
+
+// ── SCAN TAB ─────────────────────────────────────────────
+function ScanTab(props) {
+  var onApply = props.onApply;
+  var accent  = props.accent;
+
+  var _key  = useState(localStorage.getItem("bb_apikey")||"");
+  var apiKey = _key[0], setApiKey = _key[1];
+  var _img  = useState(null);
+  var img   = _img[0], setImg   = _img[1];
+  var _res  = useState(null);
+  var result= _res[0], setResult= _res[1];
+  var _load = useState(false);
+  var loading=_load[0], setLoading=_load[1];
+  var _err  = useState(null);
+  var err   = _err[0], setErr   = _err[1];
+  var fileRef = useRef(null);
+
+  function saveKey(k) {
+    setApiKey(k);
+    try { localStorage.setItem("bb_apikey", k); } catch(e){}
+  }
+
+  function handleFile(file) {
+    if (!file) return;
+    var reader = new FileReader();
+    reader.onload = function(ev) {
+      var url = ev.target.result;
+      var b64 = url.split(",")[1];
+      var mime = file.type || "image/jpeg";
+      setImg({url:url, b64:b64, mime:mime});
+      setResult(null);
+      setErr(null);
+    };
+    reader.readAsDataURL(file);
+  }
+
+  function analyze() {
+    if (!img) return;
+    if (!apiKey || apiKey.length < 20) { setErr("Zadaj platný Anthropic API kľúč."); return; }
+    setLoading(true);
+    setErr(null);
+    fetch("https://api.anthropic.com/v1/messages", {
+      method:"POST",
+      headers:{
+        "Content-Type":"application/json",
+        "x-api-key": apiKey,
+        "anthropic-version":"2023-06-01",
+        "anthropic-dangerous-direct-browser-access":"true"
+      },
+      body: JSON.stringify({
+        model:"claude-opus-4-5",
+        max_tokens:600,
+        messages:[{role:"user",content:[
+          {type:"image",source:{type:"base64",media_type:img.mime,data:img.b64}},
+          {type:"text",text:'You are a specialty coffee expert. Analyze this photo (beans, grounds, or brewed cup). Respond ONLY with a raw JSON object, no markdown fences:\n{"roast":"light"|"medium"|"dark","confidence":0-100,"reasoning":"1-2 sentences","grindSetting":"X.X \u2013 X.X (Fellow Ode 2 scale 1-11)","ratio":"1:15"|"1:16"|"1:17","coffeeG":number,"notes":"short brewing tip"}'}
+        ]}]
+      })
+    })
+    .then(function(r){ return r.json(); })
+    .then(function(data) {
+      if (data.error) throw new Error(data.error.message || "API error");
+      var block = (data.content||[]).find(function(b){return b.type==="text";});
+      if (!block) throw new Error("Žiadna odpoveď od AI.");
+      var clean = block.text.replace(/```json|```/g,"").trim();
+      var parsed = JSON.parse(clean);
+      setResult(parsed);
+      setLoading(false);
+    })
+    .catch(function(ex) {
+      setErr("Chyba: " + ex.message);
+      setLoading(false);
+    });
+  }
+
+  var rc = result ? ((ROASTS.find(function(r){return r.id===result.roast;})||ROASTS[1]).color) : accent;
+
+  return h("div",{style:{padding:"0 16px"}},
+
+    // API key input
+    h(Card, null,
+      h(Label, null, "Anthropic API kľúč"),
+      h("input",{
+        type:"password",
+        placeholder:"sk-ant-...",
+        value:apiKey,
+        onChange:function(ev){saveKey(ev.target.value);},
+        style:{width:"100%",background:"#0D0907",border:"1px solid #2A1F14",borderRadius:"8px",
+               padding:"10px 12px",color:"#F5E6C8",fontSize:"13px",fontFamily:"monospace",outline:"none"}
+      }),
+      h("div",{style:{fontSize:"10px",color:"#4A3728",marginTop:"6px"}},
+        "Kľúč sa uloží len lokálne v prehliadači. Získaš ho na console.anthropic.com")
+    ),
+
+    // Photo area
+    h("div",{
+      onClick:function(){if(fileRef.current)fileRef.current.click();},
+      style:{border:"2px dashed "+(img?"transparent":accent+"44"),borderRadius:"16px",
+             background:img?"transparent":"#14100C",overflow:"hidden",marginBottom:"14px",
+             cursor:"pointer",minHeight:"170px",display:"flex",alignItems:"center",justifyContent:"center"}
+    },
+      img
+        ? h("img",{src:img.url,style:{width:"100%",maxHeight:"270px",objectFit:"cover",borderRadius:"14px",display:"block"}})
+        : h("div",{style:{textAlign:"center",padding:"28px 20px"}},
+            h("div",{style:{fontSize:"38px",marginBottom:"10px"}},"📷"),
+            h("div",{style:{color:accent,fontSize:"14px",fontWeight:"bold",marginBottom:"3px"}},"Odfotiť kávu"),
+            h("div",{style:{color:"#6B5B45",fontSize:"11px"}},"Zrná, mletá káva alebo šálka")
+          )
+    ),
+    h("input",{ref:fileRef,type:"file",accept:"image/*",capture:"environment",
+               style:{display:"none"},onChange:function(ev){handleFile(ev.target.files[0]);}}),
+
+    !result && h("button",{
+      className: loading ? "scan-btn blinking" : "scan-btn",
+      onClick: img ? analyze : function(){if(fileRef.current)fileRef.current.click();},
+      style:{background:img?accent:accent+"33",color:img?"#0D0907":accent,border:"none",marginBottom:"14px",
+             opacity:loading?1:1}
+    }, loading ? "Analyzujem..." : img ? "🔍 Analyzovať" : "Vyber fotku"),
+
+    err && h("div",{style:{color:"#E07B54",fontSize:"12px",textAlign:"center",marginBottom:"12px",lineHeight:1.4}}, err),
+
+    result && h("div",null,
+      h(Card,{style:{border:"1px solid "+rc+"44"}},
+        h("div",{style:{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:"14px"}},
+          h("div",{style:{fontSize:"9px",letterSpacing:"2px",color:"#8B7355",textTransform:"uppercase"}},"AI Analýza"),
+          h("div",{style:{background:rc+"22",border:"1px solid "+rc+"44",borderRadius:"20px",padding:"3px 10px",fontSize:"11px",color:rc}},
+            result.confidence+"% istota")
+        ),
+        h("div",{style:{fontSize:"22px",color:rc,fontWeight:"bold",textTransform:"capitalize",marginBottom:"12px"}},
+          result.roast),
+        h("div",{style:{display:"grid",gridTemplateColumns:"repeat(3,1fr)",gap:"8px",marginBottom:"12px"}},
+          [["Pomer",result.ratio||"–"],["Ode 2",(result.grindSetting||"–").split("–")[0].trim()+"…"],["Káva",(result.coffeeG||30)+"g"]].map(function(row){
+            return h("div",{key:row[0],style:{background:rc+"10",borderRadius:"8px",padding:"10px",textAlign:"center"}},
+              h("div",{style:{fontSize:"9px",color:"#6B5B45",marginBottom:"3px",textTransform:"uppercase",letterSpacing:"1px"}},row[0]),
+              h("div",{style:{fontSize:"14px",color:"#F5E6C8",fontWeight:"bold"}},row[1])
+            );
+          })
+        ),
+        h("div",{style:{background:"#0D0907",borderRadius:"8px",padding:"12px",marginBottom:"10px"}},
+          h("div",{style:{fontSize:"10px",color:"#8B7355",marginBottom:"4px"}},"🔬 Čo vidím"),
+          h("div",{style:{fontSize:"12px",color:"#C4A882",lineHeight:1.5}}, result.reasoning)
+        ),
+        result.notes && h("div",{style:{background:rc+"10",borderRadius:"8px",padding:"12px",marginBottom:"14px"}},
+          h("div",{style:{fontSize:"10px",color:"#8B7355",marginBottom:"4px"}},"💡 Tip"),
+          h("div",{style:{fontSize:"12px",color:"#C4A882",lineHeight:1.5}}, result.notes)
+        ),
+        h("button",{
+          onClick:function(){onApply(result);},
+          style:{width:"100%",padding:"14px",background:rc,border:"none",borderRadius:"10px",
+                 color:"#0D0907",fontSize:"14px",fontWeight:"bold",fontFamily:"inherit"}
+        }, "✓ Použiť odporúčania → Brew")
+      ),
+      h("button",{
+        onClick:function(){setImg(null);setResult(null);},
+        style:{width:"100%",padding:"12px",background:"transparent",border:"1px solid #2A1F14",
+               borderRadius:"10px",color:"#6B5B45",fontSize:"13px",fontFamily:"inherit",marginBottom:"8px"}
+      }, "↺ Iná fotka")
+    )
+  );
+}
+
+// ── ROOT APP ──────────────────────────────────────────────
+function App() {
+  var _tab  = useState("brew");
+  var tab   = _tab[0], setTab = _tab[1];
+  var _roast= useState(ROASTS[0]);
+  var roast = _roast[0], setRoast = _roast[1];
+  var _g    = useState(30);
+  var g     = _g[0], setG = _g[1];
+  var c     = roast.color;
+
+  function applyAI(result) {
+    var r = ROASTS.find(function(x){return x.id===result.roast;}) || ROASTS[1];
+    setRoast(r);
+    var cg = parseInt(result.coffeeG, 10);
+    if (cg >= 10 && cg <= 200) setG(cg);
+    setTab("brew");
+  }
+
+  return h("div",{style:{width:"100%",maxWidth:"460px",position:"relative"}},
+
+    // Ambient glow
+    h("div",{style:{position:"fixed",top:"-100px",left:"50%",transform:"translateX(-50%)",
+                    width:"500px",height:"300px",
+                    background:"radial-gradient(ellipse,"+c+"18 0%,transparent 70%)",
+                    pointerEvents:"none",zIndex:0,transition:"background 0.8s"}}),
+
+    h("div",{style:{position:"relative",zIndex:1}},
+
+      // Header
+      h("div",{style:{textAlign:"center",padding:"8px 16px 18px"}},
+        h("div",{style:{fontSize:"9px",letterSpacing:"4px",color:c,marginBottom:"6px",textTransform:"uppercase",transition:"color 0.5s"}},
+          "Batch Brew"),
+        h("h1",{style:{fontSize:"clamp(24px,5.5vw,36px)",fontWeight:"normal",letterSpacing:"-0.5px",lineHeight:1.15}},
+          "Sprievodca ", h("em",{style:{color:c,transition:"color 0.5s"}}, "liatím")
+        )
+      ),
+
+      // Tab bar
+      h("div",{style:{display:"flex",borderBottom:"1px solid #1E150E",marginBottom:"20px",
+                      position:"sticky",top:0,background:"#0D0907",zIndex:10,padding:"0 16px"}},
+        h("button",{className:"tab-btn "+(tab==="brew"?"on":""),style:{"--c":c},onClick:function(){setTab("brew");}},
+          "☕  Brew"),
+        h("button",{className:"tab-btn "+(tab==="scan"?"on":""),style:{"--c":c},onClick:function(){setTab("scan");}},
+          "📷  AI Scan")
+      ),
+
+      tab === "brew"
+        ? h(BrewTab, {roast:roast, setRoast:setRoast, g:g, setG:setG})
+        : h(ScanTab, {onApply:applyAI, accent:c})
+    )
+  );
+}
+
+// Boot
+try {
+  ReactDOM.createRoot(document.getElementById("app")).render(h(App));
+} catch(ex) {
+  document.getElementById("app").innerHTML =
+    '<div style="color:#E07B54;padding:32px;text-align:center;font-size:14px;">Chyba pri načítaní: '+ex.message+'</div>';
+}
+
+})();
+</script>
+</body>
+</html>
