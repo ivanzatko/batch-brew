@@ -1,12 +1,10 @@
 // Vercel serverless function — proxies coffee scan to Anthropic API
-// API key is stored as ANTHROPIC_API_KEY env var in Vercel, never exposed to client
 
-const PROMPT = `You are a specialty coffee expert. Analyze this photo (beans, grounds, or brewed cup). Respond ONLY with a raw JSON object, no markdown fences:
-{"roast":"light"|"medium"|"dark","confidence":0-100,"reasoning":"1-2 sentences in Slovak","grindSetting":"X.X – X.X (Fellow Ode 2 scale 1-11)","ratio":"1:15"|"1:16"|"1:17","coffeeG":number,"notes":"short brewing tip in Slovak"}`;
+const PROMPT = 'You are a specialty coffee expert. Analyze this photo (beans, grounds, or brewed cup). Respond ONLY with a raw JSON object, no markdown fences:\n{"roast":"light"|"medium"|"dark","confidence":0-100,"reasoning":"1-2 sentences in Slovak","grindSetting":"X.X – X.X (Fellow Ode 2 scale 1-11)","ratio":"1:15"|"1:16"|"1:17","coffeeG":number,"notes":"short brewing tip in Slovak"}';
 
-const MAX_IMAGE_SIZE = 5 * 1024 * 1024; // 5MB
+const MAX_IMAGE_SIZE = 5 * 1024 * 1024;
 
-export default async function handler(req, res) {
+module.exports = async function handler(req, res) {
   res.setHeader('Access-Control-Allow-Origin', '*');
   res.setHeader('Access-Control-Allow-Methods', 'POST, OPTIONS');
   res.setHeader('Access-Control-Allow-Headers', 'Content-Type');
@@ -17,7 +15,9 @@ export default async function handler(req, res) {
   const apiKey = process.env.ANTHROPIC_API_KEY;
   if (!apiKey) return res.status(500).json({ error: 'API key not configured' });
 
-  const { image, mime } = req.body || {};
+  const body = req.body || {};
+  const image = body.image;
+  const mime = body.mime;
 
   if (!image || typeof image !== 'string') {
     return res.status(400).json({ error: 'Missing image (base64)' });
@@ -25,7 +25,7 @@ export default async function handler(req, res) {
   if (!mime || !mime.startsWith('image/')) {
     return res.status(400).json({ error: 'Invalid mime type' });
   }
-  if (image.length > MAX_IMAGE_SIZE * 1.37) { // base64 overhead
+  if (image.length > MAX_IMAGE_SIZE * 1.37) {
     return res.status(400).json({ error: 'Image too large (max 5MB)' });
   }
 
@@ -56,7 +56,7 @@ export default async function handler(req, res) {
       return res.status(response.status).json({ error: data.error.message || 'Anthropic API error' });
     }
 
-    const block = (data.content || []).find(b => b.type === 'text');
+    const block = (data.content || []).find(function(b) { return b.type === 'text'; });
     if (!block) return res.status(500).json({ error: 'No response from AI' });
 
     const clean = block.text.replace(/```json|```/g, '').trim();
@@ -65,4 +65,4 @@ export default async function handler(req, res) {
   } catch (error) {
     return res.status(500).json({ error: 'Scan failed: ' + error.message });
   }
-}
+};
