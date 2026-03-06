@@ -39,7 +39,6 @@ var h = R.createElement;
 var useState = R.useState;
 var useEffect = R.useEffect;
 var useRef = R.useRef;
-var useCallback = R.useCallback;
 
 // ── DATA ────────────────────────────────────────────────
 var ROASTS = [
@@ -59,7 +58,7 @@ function buildPhases(g, ratio) {
   var p2    = Math.round(rem * 0.35);
   var p3    = total - bloom - p1 - p2;
   return [
-    {name:"Prebudenie", start:0,   dur:45, water:bloom, cum:bloom,         icon:"\u2615", info:"Pomaly nasýť všetku kávu rovnomerne — daj jej čas sa nadýchnuť"},
+    {name:"Prebudenie", start:0,   dur:45, water:bloom, cum:bloom,         icon:"\u2615", info:"Pomaly nasýť všetku kávu — daj jej čas sa nadýchnuť"},
     {name:"Prvé liatie",   start:45,  dur:45, water:p1,    cum:bloom+p1,      icon:"\u223F", info:"Krúživý pohyb od stredu von — pomaly, vedome"},
     {name:"Druhé liatie",   start:90,  dur:45, water:p2,    cum:bloom+p1+p2,   icon:"\u223F", info:"Udržuj stabilnú hladinu — nechaj vodu pracovať"},
     {name:"Posledné liatie",   start:135, dur:45, water:p3,    cum:total,         icon:"\u223F", info:"Záverečný kruh — dokončenie extrakcie"},
@@ -110,7 +109,6 @@ function BrewTab(props) {
   var water  = g * roast.ratio;
   var phases = buildPhases(g, roast.ratio);
 
-  // current phase index
   var curIdx = -1;
   for (var i = 0; i < phases.length; i++) {
     if (elapsed >= phases[i].start && (i === phases.length-1 || elapsed < phases[i+1].start)) {
@@ -221,14 +219,17 @@ function BrewTab(props) {
         h("div",{style:{height:"100%",width:pct+"%",background:"linear-gradient(90deg,"+c+"88,"+c+")",borderRadius:"2px",transition:"width 0.8s ease"}})
       ),
 
-      // Active phase banner
+      // Active phase banner — cumulative values
       (running && cur) ? h("div",{style:{background:c+"15",border:"1px solid "+c+"33",borderRadius:"10px",
                                           padding:"12px 14px",marginBottom:"12px",display:"flex",alignItems:"center",gap:"10px"}},
         h("div",{style:{fontSize:"20px"}}, cur.icon),
         h("div",{style:{flex:1}},
           h("div",{style:{fontSize:"13px",color:c,fontWeight:"bold",transition:"color 0.3s"}},
             cur.name,
-            cur.water > 0 ? h("span",{style:{color:"#F5E6C8",marginLeft:"8px"}}, "\u2192 "+cur.water+"ml") : null
+            cur.water > 0 ? h("span",{style:{color:"#F5E6C8",marginLeft:"8px"}},
+              "\u2192 ", h("span",{style:{fontSize:"16px"}}, cur.cum+"ml"),
+              h("span",{style:{color:"#6B5B45",fontSize:"10px",marginLeft:"5px"}}, "+"+cur.water)
+            ) : null
           ),
           h("div",{style:{fontSize:"11px",color:"#8B7355",marginTop:"2px"}}, cur.info)
         ),
@@ -251,9 +252,11 @@ function BrewTab(props) {
       )
     ),
 
-    // Phase list
+    // Phase list — cumulative values
     h(Card, null,
       h(Label, null, "F\u00E1zy liatia"),
+      h("div",{style:{fontSize:"10px",color:"#4A3728",marginBottom:"8px",fontStyle:"italic"}},
+        "V\u00E1ha na v\u00E1he = kumulat\u00EDvne, nemus\u00ED\u0161 nulova\u0165"),
       phases.map(function(p, i) {
         var isActive = i === curIdx && running;
         var isPast   = elapsed > ((phases[i+1]||{start:TOTAL}).start);
@@ -270,7 +273,10 @@ function BrewTab(props) {
             h("div",{style:{display:"flex",justifyContent:"space-between",alignItems:"baseline"}},
               h("span",{style:{fontSize:"13px",color:isActive?c:"#C4A882",fontWeight:isActive?"bold":"normal",transition:"color 0.3s"}},
                 p.icon+" "+p.name,
-                p.water > 0 ? h("span",{style:{color:isActive?c:"#6B5B45",marginLeft:"6px",fontSize:"11px"}}, p.water+"ml") : null
+                p.water > 0 ? h("span",null,
+                  h("span",{style:{color:isActive?c:"#F5E6C8",marginLeft:"6px",fontSize:"13px",fontWeight:"bold"}}, p.cum+"ml"),
+                  h("span",{style:{color:isActive?c+"88":"#4A3728",marginLeft:"4px",fontSize:"10px"}}, "+"+p.water)
+                ) : null
               ),
               h("span",{style:{fontSize:"10px",color:"#4A3728"}}, fmtTime(p.start))
             ),
@@ -292,8 +298,6 @@ function ScanTab(props) {
   var onApply = props.onApply;
   var accent  = props.accent;
 
-  var _key  = useState(localStorage.getItem("bb_apikey")||"");
-  var apiKey = _key[0], setApiKey = _key[1];
   var _img  = useState(null);
   var img   = _img[0], setImg   = _img[1];
   var _res  = useState(null);
@@ -302,7 +306,18 @@ function ScanTab(props) {
   var loading=_load[0], setLoading=_load[1];
   var _err  = useState(null);
   var err   = _err[0], setErr   = _err[1];
+  var _hasProxy = useState(null); // null=unknown, true/false
+  var hasProxy = _hasProxy[0], setHasProxy = _hasProxy[1];
+  var _key  = useState(localStorage.getItem("bb_apikey")||"");
+  var apiKey = _key[0], setApiKey = _key[1];
   var fileRef = useRef(null);
+
+  // Check if proxy is available on mount
+  useEffect(function() {
+    fetch("/api/scan", {method:"OPTIONS"})
+      .then(function(r){ setHasProxy(r.ok || r.status === 200 || r.status === 405); })
+      .catch(function(){ setHasProxy(false); });
+  }, []);
 
   function saveKey(k) {
     setApiKey(k);
@@ -323,12 +338,22 @@ function ScanTab(props) {
     reader.readAsDataURL(file);
   }
 
-  function analyze() {
-    if (!img) return;
-    if (!apiKey || apiKey.length < 20) { setErr("Zadaj platn\u00FD Anthropic API k\u013E\u00FA\u010D."); return; }
-    setLoading(true);
-    setErr(null);
-    fetch("https://api.anthropic.com/v1/messages", {
+  function analyzeViaProxy() {
+    return fetch("/api/scan", {
+      method:"POST",
+      headers:{"Content-Type":"application/json"},
+      body: JSON.stringify({image:img.b64, mime:img.mime})
+    })
+    .then(function(r){ return r.json(); })
+    .then(function(data) {
+      if (data.error) throw new Error(data.error);
+      return data;
+    });
+  }
+
+  function analyzeViaDirectAPI() {
+    if (!apiKey || apiKey.length < 20) throw new Error("Zadaj platn\u00FD Anthropic API k\u013E\u00FA\u010D.");
+    return fetch("https://api.anthropic.com/v1/messages", {
       method:"POST",
       headers:{
         "Content-Type":"application/json",
@@ -349,24 +374,46 @@ function ScanTab(props) {
     .then(function(data) {
       if (data.error) throw new Error(data.error.message || "API error");
       var block = (data.content||[]).find(function(b){return b.type==="text";});
-      if (!block) throw new Error("\u017Diadna odpove\u010F od AI.");
+      if (!block) throw new Error("Žiadna odpoveď od AI.");
       var clean = block.text.replace(/```json|```/g,"").trim();
-      var parsed = JSON.parse(clean);
-      setResult(parsed);
-      setLoading(false);
-    })
-    .catch(function(ex) {
-      setErr("Chyba: " + ex.message);
-      setLoading(false);
+      return JSON.parse(clean);
     });
+  }
+
+  function analyze() {
+    if (!img) return;
+    setLoading(true);
+    setErr(null);
+
+    var promise;
+    if (hasProxy) {
+      promise = analyzeViaProxy();
+    } else {
+      if (!apiKey || apiKey.length < 20) {
+        setErr("Zadaj platn\u00FD Anthropic API k\u013E\u00FA\u010D.");
+        setLoading(false);
+        return;
+      }
+      promise = analyzeViaDirectAPI();
+    }
+
+    promise
+      .then(function(parsed) {
+        setResult(parsed);
+        setLoading(false);
+      })
+      .catch(function(ex) {
+        setErr("Chyba: " + ex.message);
+        setLoading(false);
+      });
   }
 
   var rc = result ? ((ROASTS.find(function(r){return r.id===result.roast;})||ROASTS[1]).color) : accent;
 
   return h("div",{style:{padding:"0 16px"}},
 
-    // API key input
-    h(Card, null,
+    // Only show API key input if no proxy available
+    hasProxy === false ? h(Card, null,
       h(Label, null, "Anthropic API k\u013E\u00FA\u010D"),
       h("input",{
         type:"password",
@@ -378,7 +425,7 @@ function ScanTab(props) {
       }),
       h("div",{style:{fontSize:"10px",color:"#4A3728",marginTop:"6px"}},
         "K\u013E\u00FA\u010D sa ulo\u017E\u00ED len lok\u00E1lne v prehliada\u010Di. Z\u00EDska\u0161 ho na console.anthropic.com")
-    ),
+    ) : null,
 
     // Photo area
     h("div",{
@@ -401,8 +448,8 @@ function ScanTab(props) {
     !result && h("button",{
       className: loading ? "scan-btn blinking" : "scan-btn",
       onClick: img ? analyze : function(){if(fileRef.current)fileRef.current.click();},
-      style:{background:img?accent:accent+"33",color:img?"#0D0907":accent,border:"none",marginBottom:"14px",
-             opacity:loading?1:1}
+      style:{width:"100%",padding:"14px",borderRadius:"10px",fontSize:"14px",fontWeight:"bold",fontFamily:"inherit",
+             background:img?accent:accent+"33",color:img?"#0D0907":accent,border:"none",marginBottom:"14px"}
     }, loading ? "Analyzujem..." : img ? "Analyzova\u0165" : "Vyber fotku"),
 
     err && h("div",{style:{color:"#E07B54",fontSize:"12px",textAlign:"center",marginBottom:"12px",lineHeight:1.4}}, err),
@@ -467,7 +514,6 @@ function App() {
 
   return h("div",{style:{width:"100%",maxWidth:"460px",position:"relative"}},
 
-    // Ambient glow
     h("div",{style:{position:"fixed",top:"-100px",left:"50%",transform:"translateX(-50%)",
                     width:"500px",height:"300px",
                     background:"radial-gradient(ellipse,"+c+"18 0%,transparent 70%)",
@@ -475,7 +521,6 @@ function App() {
 
     h("div",{style:{position:"relative",zIndex:1}},
 
-      // Header
       h("div",{style:{textAlign:"center",padding:"8px 16px 18px"}},
         h("div",{style:{fontSize:"9px",letterSpacing:"4px",color:c,marginBottom:"6px",textTransform:"uppercase",transition:"color 0.5s"}},
           "Ritu\u00E1l"),
@@ -486,7 +531,6 @@ function App() {
           "Ka\u017Ed\u00E1 \u0161\u00E1lka je anal\u00F3gov\u00FD akt")
       ),
 
-      // Tab bar
       h("div",{style:{display:"flex",borderBottom:"1px solid #1E150E",marginBottom:"20px",
                       position:"sticky",top:0,background:"#0D0907",zIndex:10,padding:"0 16px"}},
         h("button",{className:"tab-btn "+(tab==="brew"?"on":""),style:{"--c":c},onClick:function(){setTab("brew");}},
@@ -502,7 +546,6 @@ function App() {
   );
 }
 
-// Boot
 try {
   ReactDOM.createRoot(document.getElementById("app")).render(h(App));
 } catch(ex) {
