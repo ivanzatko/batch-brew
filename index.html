@@ -5,9 +5,9 @@
 <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no"/>
 <meta name="apple-mobile-web-app-capable" content="yes"/>
 <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent"/>
-<meta name="apple-mobile-web-app-title" content="Batch Brew"/>
+<meta name="apple-mobile-web-app-title" content="Rituál"/>
 <meta name="theme-color" content="#0D0907"/>
-<title>Batch Brew</title>
+<title>Rituál · Pomalé varenie kávy</title>
 <style>
 *{box-sizing:border-box;-webkit-tap-highlight-color:transparent;margin:0;padding:0;}
 html,body{height:100%;background:#0D0907;}
@@ -43,12 +43,12 @@ var useCallback = R.useCallback;
 
 // ── DATA ────────────────────────────────────────────────
 var ROASTS = [
-  {id:"light",  sk:"Svetlá",  ratio:15, label:"1:15", desc:"High extraction · bright acidity",   color:"#D4A574",
-   grind:{range:"6.5 – 7.5", pct:62, tip:"Coarser grind to avoid over-extraction. Start at 7 and dial in."}},
-  {id:"medium", sk:"Stredná", ratio:16, label:"1:16", desc:"Balanced flavour · smooth body",      color:"#A0522D",
-   grind:{range:"5.5 – 6.5", pct:50, tip:"Classic batch brew zone. Start at 6 — bitter = coarser, sour = finer."}},
-  {id:"dark",   sk:"Tmavá",   ratio:17, label:"1:17", desc:"Low extraction · full body",          color:"#7B3F1E",
-   grind:{range:"4.5 – 5.5", pct:38, tip:"Finer grind compensates for lower solubility. Start at 5."}},
+  {id:"light",  sk:"Svetlá",  ratio:15, label:"1:15", desc:"Jasná kyslosť · jemná extrakcia",   color:"#D4A574",
+   grind:{range:"6.5 – 7.5", pct:62, tip:"Hrubšie mletie zabraňuje preextrahovaniu. Začni na 7 a dolaď."}},
+  {id:"medium", sk:"Stredná", ratio:16, label:"1:16", desc:"Vyvážená chuť · hladké telo",      color:"#A0522D",
+   grind:{range:"5.5 – 6.5", pct:50, tip:"Klasická zóna pre prekvapkávanie. Začni na 6 — horkosť = hrubšie, kyslosť = jemnejšie."}},
+  {id:"dark",   sk:"Tmavá",   ratio:17, label:"1:17", desc:"Plné telo · nízka extrakcia",          color:"#7B3F1E",
+   grind:{range:"4.5 – 5.5", pct:38, tip:"Jemnejšie mletie kompenzuje nižšiu rozpustnosť. Začni na 5."}},
 ];
 
 function buildPhases(g, ratio) {
@@ -59,11 +59,11 @@ function buildPhases(g, ratio) {
   var p2    = Math.round(rem * 0.35);
   var p3    = total - bloom - p1 - p2;
   return [
-    {name:"Blooming", start:0,   dur:45, water:bloom, cum:bloom,         icon:"💧", info:"Slowly saturate all the grounds evenly"},
-    {name:"Pour 1",   start:45,  dur:45, water:p1,    cum:bloom+p1,      icon:"🫗", info:"Circular motion from center outward"},
-    {name:"Pour 2",   start:90,  dur:45, water:p2,    cum:bloom+p1+p2,   icon:"🫗", info:"Keep the water level stable"},
-    {name:"Pour 3",   start:135, dur:45, water:p3,    cum:total,         icon:"🫗", info:"Final pour, completing extraction"},
-    {name:"Drip",     start:180, dur:60, water:0,     cum:total,         icon:"⏳", info:"Let the bed drain completely"},
+    {name:"Prebudenie", start:0,   dur:45, water:bloom, cum:bloom,         icon:"\u2615", info:"Pomaly nasýť všetku kávu rovnomerne — daj jej čas sa nadýchnuť"},
+    {name:"Prvé liatie",   start:45,  dur:45, water:p1,    cum:bloom+p1,      icon:"\u223F", info:"Krúživý pohyb od stredu von — pomaly, vedome"},
+    {name:"Druhé liatie",   start:90,  dur:45, water:p2,    cum:bloom+p1+p2,   icon:"\u223F", info:"Udržuj stabilnú hladinu — nechaj vodu pracovať"},
+    {name:"Posledné liatie",   start:135, dur:45, water:p3,    cum:total,         icon:"\u223F", info:"Záverečný kruh — dokončenie extrakcie"},
+    {name:"Kvapkanie",     start:180, dur:60, water:0,     cum:total,         icon:"\u29D6", info:"Nechaj voľne odkvapkať — teraz len pozoruj"},
   ];
 }
 
@@ -145,7 +145,7 @@ function BrewTab(props) {
 
     // Roast selector
     h(Card, null,
-      h(Label, null, "Roast"),
+      h(Label, null, "Praženie"),
       h("div", {style:{display:"grid",gridTemplateColumns:"repeat(3,1fr)",gap:"8px",marginBottom:"8px"}},
         ROASTS.map(function(r) {
           var active = roast.id === r.id;
@@ -166,11 +166,11 @@ function BrewTab(props) {
     // Grind guide
     h(Card, null,
       h("div",{style:{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:"8px"}},
-        h(Label,{style:{marginBottom:0}}, "Grind · Fellow Ode 2"),
+        h(Label,{style:{marginBottom:0}}, "Mletie \u00B7 Fellow Ode 2"),
         h("div",{style:{fontSize:"19px",color:c,fontWeight:"bold",transition:"color 0.5s"}}, roast.grind.range)
       ),
       h("div",{style:{fontSize:"9px",color:"#4A3728",display:"flex",justifyContent:"space-between"}},
-        h("span",null,"1 — Fine"), h("span",null,"11 — Coarse")
+        h("span",null,"1 \u2014 Jemne"), h("span",null,"11 \u2014 Hrubo")
       ),
       h("div",{className:"grind-track"},
         h("div",{className:"grind-fill",style:{width:roast.grind.pct+"%",background:"linear-gradient(90deg,"+c+"66,"+c+")"}})
@@ -180,11 +180,11 @@ function BrewTab(props) {
 
     // Coffee amount
     h(Card, null,
-      h(Label, null, "Coffee amount"),
+      h(Label, null, "Množstvo kávy"),
       h("div",{style:{display:"flex",alignItems:"center",gap:"12px",marginBottom:"14px"}},
         h("button",{onClick:function(){setG(function(x){return Math.max(10,x-5);});},
           style:{width:"40px",height:"40px",borderRadius:"50%",border:"1px solid "+c+"44",background:"transparent",color:c,fontSize:"22px",display:"flex",alignItems:"center",justifyContent:"center",flexShrink:0}},
-          "−"),
+          "\u2212"),
         h("div",{style:{flex:1,textAlign:"center"}},
           h("div",{style:{display:"flex",alignItems:"baseline",justifyContent:"center",gap:"4px"}},
             h("input",{type:"number",value:g,min:10,max:200,
@@ -200,7 +200,7 @@ function BrewTab(props) {
           "+")
       ),
       h("div",{style:{display:"grid",gridTemplateColumns:"repeat(4,1fr)",gap:"4px",textAlign:"center",background:c+"10",borderRadius:"8px",padding:"10px"}},
-        [["Coffee",g+"g","#F5E6C8"],["Water",water+"ml",c],["Ratio",roast.label,"#F5E6C8"],["Time",fmtTime(TOTAL),"#F5E6C8"]].map(function(row){
+        [["K\u00E1va",g+"g","#F5E6C8"],["Voda",water+"ml",c],["Pomer",roast.label,"#F5E6C8"],["\u010Cas",fmtTime(TOTAL),"#F5E6C8"]].map(function(row){
           return h("div",{key:row[0]},
             h("div",{style:{fontSize:"9px",color:"#6B5B45",marginBottom:"2px"}}, row[0]),
             h("div",{style:{fontSize:"15px",color:row[2],fontWeight:"bold",transition:"color 0.5s"}}, row[1])
@@ -215,7 +215,7 @@ function BrewTab(props) {
         h("div",{style:{fontSize:"clamp(52px,14vw,76px)",fontWeight:"bold",letterSpacing:"-2px",lineHeight:1,
                         fontVariantNumeric:"tabular-nums",color:done?c:running?"#F5E6C8":"#3A2A1E",transition:"color 0.3s"}},
           fmtTime(elapsed)),
-        h("div",{style:{fontSize:"11px",color:"#6B5B45",marginTop:"2px"}}, done ? "✓ Done!" : "of "+fmtTime(TOTAL))
+        h("div",{style:{fontSize:"11px",color:"#6B5B45",marginTop:"2px"}}, done ? "Hotovo. U\u017Eivaj si." : "z "+fmtTime(TOTAL))
       ),
       h("div",{style:{height:"3px",background:"#1E150E",borderRadius:"2px",marginBottom:"14px",overflow:"hidden"}},
         h("div",{style:{height:"100%",width:pct+"%",background:"linear-gradient(90deg,"+c+"88,"+c+")",borderRadius:"2px",transition:"width 0.8s ease"}})
@@ -228,12 +228,12 @@ function BrewTab(props) {
         h("div",{style:{flex:1}},
           h("div",{style:{fontSize:"13px",color:c,fontWeight:"bold",transition:"color 0.3s"}},
             cur.name,
-            cur.water > 0 ? h("span",{style:{color:"#F5E6C8",marginLeft:"8px"}}, "→ "+cur.water+"ml") : null
+            cur.water > 0 ? h("span",{style:{color:"#F5E6C8",marginLeft:"8px"}}, "\u2192 "+cur.water+"ml") : null
           ),
           h("div",{style:{fontSize:"11px",color:"#8B7355",marginTop:"2px"}}, cur.info)
         ),
         h("div",{style:{textAlign:"right",flexShrink:0}},
-          h("div",{style:{fontSize:"9px",color:"#6B5B45"}}, "left"),
+          h("div",{style:{fontSize:"9px",color:"#6B5B45"}}, "zost\u00E1va"),
           h("div",{style:{fontSize:"16px",color:"#F5E6C8"}},
             fmtTime(Math.max(0, ((phases[curIdx+1]||{start:TOTAL}).start) - elapsed))
           )
@@ -243,17 +243,17 @@ function BrewTab(props) {
       h("div",{style:{display:"flex",gap:"10px"}},
         !running
           ? h("button",{onClick:doStart,style:{flex:1,padding:"14px",background:c,border:"none",borderRadius:"10px",color:"#0D0907",fontSize:"15px",fontWeight:"bold",transition:"background 0.5s"}},
-              elapsed > 0 && !done ? "▶ Continue" : done ? "↺ Repeat" : "▶ Start")
+              elapsed > 0 && !done ? "Pokra\u010Dova\u0165" : done ? "Znova" : "Za\u010Da\u0165 ritu\u00E1l")
           : h("button",{onClick:doPause,style:{flex:1,padding:"14px",background:"transparent",border:"1px solid "+c,borderRadius:"10px",color:c,fontSize:"15px",fontWeight:"bold"}},
-              "⏸ Pause"),
+              "Pauza"),
         h("button",{onClick:doReset,style:{padding:"14px 20px",background:"transparent",border:"1px solid #2A1F14",borderRadius:"10px",color:"#6B5B45",fontSize:"15px"}},
-          "↺")
+          "\u21BA")
       )
     ),
 
     // Phase list
     h(Card, null,
-      h(Label, null, "Pour phases"),
+      h(Label, null, "F\u00E1zy liatia"),
       phases.map(function(p, i) {
         var isActive = i === curIdx && running;
         var isPast   = elapsed > ((phases[i+1]||{start:TOTAL}).start);
@@ -281,7 +281,9 @@ function BrewTab(props) {
     ),
 
     h("div",{style:{textAlign:"center",marginTop:"16px",fontSize:"9px",color:"#2A1F14",letterSpacing:"2px",paddingBottom:"4px"}},
-      "BATCH BREW · 93°C · FELLOW ODE 2")
+      "RITU\u00C1L \u00B7 93\u00B0C \u00B7 FELLOW ODE 2"),
+    h("div",{style:{textAlign:"center",marginTop:"6px",fontSize:"9px",color:"#1E150E",letterSpacing:"1px",paddingBottom:"8px"}},
+      "Anal\u00F3g \u00B7 Pomal\u00E9 veci v re\u00E1lnom priestore")
   );
 }
 
@@ -323,7 +325,7 @@ function ScanTab(props) {
 
   function analyze() {
     if (!img) return;
-    if (!apiKey || apiKey.length < 20) { setErr("Zadaj platný Anthropic API kľúč."); return; }
+    if (!apiKey || apiKey.length < 20) { setErr("Zadaj platn\u00FD Anthropic API k\u013E\u00FA\u010D."); return; }
     setLoading(true);
     setErr(null);
     fetch("https://api.anthropic.com/v1/messages", {
@@ -335,11 +337,11 @@ function ScanTab(props) {
         "anthropic-dangerous-direct-browser-access":"true"
       },
       body: JSON.stringify({
-        model:"claude-opus-4-5",
+        model:"claude-sonnet-4-6",
         max_tokens:600,
         messages:[{role:"user",content:[
           {type:"image",source:{type:"base64",media_type:img.mime,data:img.b64}},
-          {type:"text",text:'You are a specialty coffee expert. Analyze this photo (beans, grounds, or brewed cup). Respond ONLY with a raw JSON object, no markdown fences:\n{"roast":"light"|"medium"|"dark","confidence":0-100,"reasoning":"1-2 sentences","grindSetting":"X.X \u2013 X.X (Fellow Ode 2 scale 1-11)","ratio":"1:15"|"1:16"|"1:17","coffeeG":number,"notes":"short brewing tip"}'}
+          {type:"text",text:'You are a specialty coffee expert. Analyze this photo (beans, grounds, or brewed cup). Respond ONLY with a raw JSON object, no markdown fences:\n{"roast":"light"|"medium"|"dark","confidence":0-100,"reasoning":"1-2 sentences in Slovak","grindSetting":"X.X \u2013 X.X (Fellow Ode 2 scale 1-11)","ratio":"1:15"|"1:16"|"1:17","coffeeG":number,"notes":"short brewing tip in Slovak"}'}
         ]}]
       })
     })
@@ -347,7 +349,7 @@ function ScanTab(props) {
     .then(function(data) {
       if (data.error) throw new Error(data.error.message || "API error");
       var block = (data.content||[]).find(function(b){return b.type==="text";});
-      if (!block) throw new Error("Žiadna odpoveď od AI.");
+      if (!block) throw new Error("\u017Diadna odpove\u010F od AI.");
       var clean = block.text.replace(/```json|```/g,"").trim();
       var parsed = JSON.parse(clean);
       setResult(parsed);
@@ -365,7 +367,7 @@ function ScanTab(props) {
 
     // API key input
     h(Card, null,
-      h(Label, null, "Anthropic API kľúč"),
+      h(Label, null, "Anthropic API k\u013E\u00FA\u010D"),
       h("input",{
         type:"password",
         placeholder:"sk-ant-...",
@@ -375,7 +377,7 @@ function ScanTab(props) {
                padding:"10px 12px",color:"#F5E6C8",fontSize:"13px",fontFamily:"monospace",outline:"none"}
       }),
       h("div",{style:{fontSize:"10px",color:"#4A3728",marginTop:"6px"}},
-        "Kľúč sa uloží len lokálne v prehliadači. Získaš ho na console.anthropic.com")
+        "K\u013E\u00FA\u010D sa ulo\u017E\u00ED len lok\u00E1lne v prehliada\u010Di. Z\u00EDska\u0161 ho na console.anthropic.com")
     ),
 
     // Photo area
@@ -388,9 +390,9 @@ function ScanTab(props) {
       img
         ? h("img",{src:img.url,style:{width:"100%",maxHeight:"270px",objectFit:"cover",borderRadius:"14px",display:"block"}})
         : h("div",{style:{textAlign:"center",padding:"28px 20px"}},
-            h("div",{style:{fontSize:"38px",marginBottom:"10px"}},"📷"),
-            h("div",{style:{color:accent,fontSize:"14px",fontWeight:"bold",marginBottom:"3px"}},"Odfotiť kávu"),
-            h("div",{style:{color:"#6B5B45",fontSize:"11px"}},"Zrná, mletá káva alebo šálka")
+            h("div",{style:{fontSize:"38px",marginBottom:"10px"}},"\u2615"),
+            h("div",{style:{color:accent,fontSize:"14px",fontWeight:"bold",marginBottom:"3px"}},"Odfoti\u0165 k\u00E1vu"),
+            h("div",{style:{color:"#6B5B45",fontSize:"11px"}},"Zrn\u00E1, mlet\u00E1 k\u00E1va alebo \u0161\u00E1lka")
           )
     ),
     h("input",{ref:fileRef,type:"file",accept:"image/*",capture:"environment",
@@ -401,21 +403,21 @@ function ScanTab(props) {
       onClick: img ? analyze : function(){if(fileRef.current)fileRef.current.click();},
       style:{background:img?accent:accent+"33",color:img?"#0D0907":accent,border:"none",marginBottom:"14px",
              opacity:loading?1:1}
-    }, loading ? "Analyzujem..." : img ? "🔍 Analyzovať" : "Vyber fotku"),
+    }, loading ? "Analyzujem..." : img ? "Analyzova\u0165" : "Vyber fotku"),
 
     err && h("div",{style:{color:"#E07B54",fontSize:"12px",textAlign:"center",marginBottom:"12px",lineHeight:1.4}}, err),
 
     result && h("div",null,
       h(Card,{style:{border:"1px solid "+rc+"44"}},
         h("div",{style:{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:"14px"}},
-          h("div",{style:{fontSize:"9px",letterSpacing:"2px",color:"#8B7355",textTransform:"uppercase"}},"AI Analýza"),
+          h("div",{style:{fontSize:"9px",letterSpacing:"2px",color:"#8B7355",textTransform:"uppercase"}},"AI Anal\u00FDza"),
           h("div",{style:{background:rc+"22",border:"1px solid "+rc+"44",borderRadius:"20px",padding:"3px 10px",fontSize:"11px",color:rc}},
             result.confidence+"% istota")
         ),
         h("div",{style:{fontSize:"22px",color:rc,fontWeight:"bold",textTransform:"capitalize",marginBottom:"12px"}},
-          result.roast),
+          result.roast === "light" ? "Svetl\u00E1" : result.roast === "medium" ? "Stredn\u00E1" : "Tmav\u00E1"),
         h("div",{style:{display:"grid",gridTemplateColumns:"repeat(3,1fr)",gap:"8px",marginBottom:"12px"}},
-          [["Pomer",result.ratio||"–"],["Ode 2",(result.grindSetting||"–").split("–")[0].trim()+"…"],["Káva",(result.coffeeG||30)+"g"]].map(function(row){
+          [["Pomer",result.ratio||"\u2013"],["Ode 2",(result.grindSetting||"\u2013").split("\u2013")[0].trim()+"\u2026"],["K\u00E1va",(result.coffeeG||30)+"g"]].map(function(row){
             return h("div",{key:row[0],style:{background:rc+"10",borderRadius:"8px",padding:"10px",textAlign:"center"}},
               h("div",{style:{fontSize:"9px",color:"#6B5B45",marginBottom:"3px",textTransform:"uppercase",letterSpacing:"1px"}},row[0]),
               h("div",{style:{fontSize:"14px",color:"#F5E6C8",fontWeight:"bold"}},row[1])
@@ -423,24 +425,24 @@ function ScanTab(props) {
           })
         ),
         h("div",{style:{background:"#0D0907",borderRadius:"8px",padding:"12px",marginBottom:"10px"}},
-          h("div",{style:{fontSize:"10px",color:"#8B7355",marginBottom:"4px"}},"🔬 Čo vidím"),
+          h("div",{style:{fontSize:"10px",color:"#8B7355",marginBottom:"4px"}},"\u010Co vid\u00EDm"),
           h("div",{style:{fontSize:"12px",color:"#C4A882",lineHeight:1.5}}, result.reasoning)
         ),
         result.notes && h("div",{style:{background:rc+"10",borderRadius:"8px",padding:"12px",marginBottom:"14px"}},
-          h("div",{style:{fontSize:"10px",color:"#8B7355",marginBottom:"4px"}},"💡 Tip"),
+          h("div",{style:{fontSize:"10px",color:"#8B7355",marginBottom:"4px"}},"Tip"),
           h("div",{style:{fontSize:"12px",color:"#C4A882",lineHeight:1.5}}, result.notes)
         ),
         h("button",{
           onClick:function(){onApply(result);},
           style:{width:"100%",padding:"14px",background:rc,border:"none",borderRadius:"10px",
                  color:"#0D0907",fontSize:"14px",fontWeight:"bold",fontFamily:"inherit"}
-        }, "✓ Použiť odporúčania → Brew")
+        }, "Pou\u017Ei\u0165 a vari\u0165")
       ),
       h("button",{
         onClick:function(){setImg(null);setResult(null);},
         style:{width:"100%",padding:"12px",background:"transparent",border:"1px solid #2A1F14",
                borderRadius:"10px",color:"#6B5B45",fontSize:"13px",fontFamily:"inherit",marginBottom:"8px"}
-      }, "↺ Iná fotka")
+      }, "In\u00E1 fotka")
     )
   );
 }
@@ -476,19 +478,21 @@ function App() {
       // Header
       h("div",{style:{textAlign:"center",padding:"8px 16px 18px"}},
         h("div",{style:{fontSize:"9px",letterSpacing:"4px",color:c,marginBottom:"6px",textTransform:"uppercase",transition:"color 0.5s"}},
-          "Batch Brew"),
+          "Ritu\u00E1l"),
         h("h1",{style:{fontSize:"clamp(24px,5.5vw,36px)",fontWeight:"normal",letterSpacing:"-0.5px",lineHeight:1.15}},
-          "Sprievodca ", h("em",{style:{color:c,transition:"color 0.5s"}}, "liatím")
-        )
+          "Pomal\u00E9 ", h("em",{style:{color:c,transition:"color 0.5s"}}, "varenie")
+        ),
+        h("div",{style:{fontSize:"11px",color:"#4A3728",marginTop:"6px",fontStyle:"italic",letterSpacing:"0.5px"}},
+          "Ka\u017Ed\u00E1 \u0161\u00E1lka je anal\u00F3gov\u00FD akt")
       ),
 
       // Tab bar
       h("div",{style:{display:"flex",borderBottom:"1px solid #1E150E",marginBottom:"20px",
                       position:"sticky",top:0,background:"#0D0907",zIndex:10,padding:"0 16px"}},
         h("button",{className:"tab-btn "+(tab==="brew"?"on":""),style:{"--c":c},onClick:function(){setTab("brew");}},
-          "☕  Brew"),
+          "Varenie"),
         h("button",{className:"tab-btn "+(tab==="scan"?"on":""),style:{"--c":c},onClick:function(){setTab("scan");}},
-          "📷  AI Scan")
+          "AI Rozpoznanie")
       ),
 
       tab === "brew"
@@ -503,7 +507,7 @@ try {
   ReactDOM.createRoot(document.getElementById("app")).render(h(App));
 } catch(ex) {
   document.getElementById("app").innerHTML =
-    '<div style="color:#E07B54;padding:32px;text-align:center;font-size:14px;">Chyba pri načítaní: '+ex.message+'</div>';
+    '<div style="color:#E07B54;padding:32px;text-align:center;font-size:14px;">Chyba pri na\u010D\u00EDtan\u00ED: '+ex.message+'</div>';
 }
 
 })();
